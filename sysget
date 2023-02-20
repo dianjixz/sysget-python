@@ -1,0 +1,162 @@
+#!/bin/env python3
+import os
+import sys
+
+class sysget_object():
+    argv = []
+    version = "3.0.0"
+    ConfigPath = "/etc/sysget/sysget"
+    DefaultPackageManager = ""
+    EnvConfigPath = ""
+    PackageManagerTranslationDict = {
+        "apt": {"search": "apt search ", "install": "apt install ", "uninquire": "-y", "uninstall": "apt purge ", "autoremove": "apt purge --autoremove", "update": "apt update", "upgrade": "apt upgrade", "upgrade_pkg": "apt upgrade ", "clean": "apt autoclean && apt clean", "list":"apt list"},
+        "xbps": {"search": "xbps-query -Rs ", "install": "xbps-install ", "uninquire": "", "uninstall": "xbps-remove ", "autoremove": "xbps-remove -o", "update": "xbps-install -S", "upgrade": "xbps-install -Su", "upgrade_pkg": "xbps-install -u ", "clean": "xbps-remove -O", "list":""},
+        "dnf": {"search": "dnf search ", "install": "dnf install ", "uninquire": "-y", "uninstall": "dnf erase ", "autoremove": "dnf autoremove", "update": "dnf clean expire-cache && sudo dnf check-update", "upgrade": "dnf update", "upgrade_pkg": "dnf upgrade ", "clean": "dnf clean all", "list":"dnf list "},
+        "yum": {"search": "yum search ", "install": "yum install ", "uninquire": "-y", "uninstall": "yum erase ", "autoremove": "yum autoremove", "update": "yum check-update", "upgrade": "yum update", "upgrade_pkg": "yum update ", "clean": "yum clean all", "list":"yum list "},
+        "zypper": {"search": "zypper search ", "install": "zypper install ", "uninquire": "--non-interactive", "uninstall": "zypper remove ", "autoremove": "zypper rm -u", "update": "zypper refresh zypper ref", "upgrade": "zypper up", "upgrade_pkg": "zypper in ", "clean": "zypper clean", "list":"zypper se "},
+        "eopkg": {"search": "eopkg search ", "install": "eopkg install ", "uninquire": "", "uninstall": "eopkg remove ", "autoremove": "eopkg remove-orphans", "update": "eopkg ur", "upgrade": "eopkg upgrade", "upgrade_pkg": "eopkg upgrade ", "clean": "eopkg delete-cache", "list":""},
+        "pacman": {"search": "pacman -Ss ", "install": "pacman -S ", "uninquire": "--noconfirm", "uninstall": "pacman -Rs ", "autoremove": "pacman -Rns $(pacman -Qtdq)", "update": "pacman -Syy", "upgrade": "pacman -Syu", "upgrade_pkg": "pacman -S ", "clean": "pacman -Sc","list":"pacman -Q "},
+        "emerge": {"search": "emerge -S ", "install": "emerge --ask ", "uninquire": "", "uninstall": "emerge -C ", "autoremove": "emerge --depclean -a", "update": "layman -f", "upgrade": "emerge --ask -u world && emerge --ask -uDN world", "upgrade_pkg": "emerge -avDuN", "clean": "eclean distfiles", "list":""},
+        "pkg": {"search": "pkg search ", "install": "pkg install ", "uninquire": "", "uninstall": "pkg delete ", "autoremove": "pkg autoremove", "update": "pkg update", "upgrade": "pkg upgrade", "upgrade_pkg": "pkg -f install ", "clean": "pkg clean", "list":""},
+        "pkg_mgr": {"search": "", "install": "pkg_add ", "uninquire": "", "uninstall": "pkg_delete ", "autoremove": "pkg_delete -a", "update": "exit=pkg_mgr does not support this, you may want to upgrade ?", "upgrade": "pkg_add -u", "upgrade_pkg": "pkg_add -u ", "clean": "pkg_delete -a", "list":""},
+        "chromebrew": {"search": "crew search ", "install": "crew install ", "uninquire": "", "uninstall": "crew remove ", "autoremove": "", "update": "", "upgrade": "crew upgrade", "upgrade_pkg": "crew upgrade ", "clean": "", "list":""},
+        "homebrew": {"search": "brew search ", "install": "brew install ", "uninquire": "", "uninstall": "brew uninstall ", "autoremove": "", "update": "brew update", "upgrade": "brew upgrade", "upgrade_pkg": "brew upgrade ", "clean": "", "list":""},
+        "nix": {"search": "nix search ", "install": "nix-env -i ", "uninquire": "", "uninstall": "nix-env -e ", "autoremove": "nix-collect-garbage -d", "update": "nix-channel --update nixpkgs", "upgrade": "nix-env -u \'*\'", "upgrade_pkg": "nix-env -u ", "clean": "", "list":""},
+        "snap": {"search": "snap find ", "install": "snap install ", "uninquire": "", "uninstall": "snap remove ", "autoremove": "", "update": "", "upgrade": "snap refresh", "upgrade_pkg": "snap refresh ", "clean": "", "list":""},
+        "npm": {"search": "npm search ", "install": "npm install -g ", "uninquire": "", "uninstall": "npm uninstall -g ", "autoremove": "npm prune", "update": "", "upgrade": "npm update -g", "upgrade_pkg": "npm update -g ", "clean": "npm cache clean --force", "list":""},
+        "flatpak": {"search": "flatpak search ", "install": "flatpak install ", "uninquire": "", "uninstall": "flatpak uninstall ", "autoremove": "flatpak uninstall --unused", "update": "", "upgrade": "flatpak update", "upgrade_pkg": "flatpak update ", "clean": "", "list":""},
+        "slapt-get": {"search": "slapt-get --search ", "install": "slapt-get --install ", "uninquire": "", "uninstall": "slapt-get --remove ", "autoremove": "slapt-get --autoremove", "update": "slapt-get --update", "upgrade": "slapt-get --upgrade", "upgrade_pkg": "slapt-get --upgrade ", "clean": "slapt-get --clean && slapt-get --autoclean && slapt-get --remove-obsolete && slapt-get --remove", "list":""},
+        "pip3": {"search": "pip3 search ", "install": "pip3 install ", "uninquire": "", "uninstall": "pip3 uninstall ", "autoremove": "", "update": "", "upgrade": "", "upgrade_pkg": "pip3 install --upgrade ", "clean": "", "list":"pip3 list "},
+        "guix": {"search": "guix package -s ", "install": "guix package -i ", "uninquire": "", "uninstall": "guix package -r ", "autoremove": "", "update": "", "upgrade": "guix package -u", "upgrade_pkg": "guix package -u ", "clean": "guix gc", "list":""},
+        "gem": {"search": "gem search ^", "install": "gem install ", "uninquire": "", "uninstall": "gem uninstall ", "autoremove": "", "update": "", "upgrade": "gem update", "upgrade_pkg": "gem update ", "clean": "", "list":""},
+        "port": {"search": "port search ", "install": "port install ", "uninquire": "", "uninstall": "port uninstall ", "autoremove": "port reclaim", "update": "port sync", "upgrade": "port upgrade outdated", "upgrade_pkg": "port upgrade ", "clean": "", "list":""}
+    }
+    def __init__(self) -> None:
+        self.CmdLists = {"search":self.work_fun, "install":self.work_fun, "remove":self.work_fun, "autoremove":self.work_fun, "update":self.work_fun, "upgrade":self.work_fun, "clean":self.work_fun, "list":self.work_fun, "set":self.set_default, "help":self.get_help, "about":self.get_about, "version":self.get_version, "--search":self.work_fun, "--install":self.work_fun, "--remove":self.work_fun, "--autoremove":self.work_fun, "--update":self.work_fun, "--upgrade":self.work_fun, "--clean":self.work_fun, "--set":self.set_default, "--help":self.get_help, "--about":self.get_about, "--version":self.get_version, "get":self.get}
+        self.EnvConfigPath = self.ConfigPath
+        self.HelpMsg =                                                               \
+            "Help of sysget " + self.version + "\n"                                      \
+            "sysget [OPTION] [PACKAGE(S)]\n"                                        \
+            "\n"                                                                    \
+            "search [QUERY]\t\t\tsearch for a package in the resporitories\n"       \
+            "install [PACKAGE] [PACKAGE]\tinstall a package from the repos, add \"-y\" option can ignore enquire\n"       \
+            "remove [PACKAGE] [PACKAGE]\tremoves a package\n"                       \
+            "autoremove\t\t\tremoves not needed packages (orphans)\n"               \
+            "update\t\t\t\tupdate the database\n"                                   \
+            "upgrade\t\t\t\tdo a system upgrade\n"                                  \
+            "upgrade [PACKAGE] [PACKAGE]\tupgrade a specific package\n"             \
+            "clean\t\t\t\tclean the download cache\n"                               \
+            "list\t\t\t\tList packages\n"                               \
+            "set [NEW MANAGER]\t\tset a new package manager\n"                      \
+            "get\t\t\t\tget default package manager\n"                      \
+            "help\t\t\t\topen this help page\n"                                     \
+            "about\t\t\t\tview legal informations\n\n"
+
+        self.AboutMsg =                                                              \
+            "About sysget " + self.version + "\n"                                        \
+            "Copyright (C) 2018-2023 Emil Engler et al.\n"                          \
+            "http://sysget.emilengler.com\n"                                        \
+            "\n"                                                                    \
+            "This program is free software: you can redistribute it and/or modify\n"\
+            "it under the terms of the GNU General Public License as published by\n"\
+            "the Free Software Foundation, either version 3 of the License, or\n"   \
+            "(at your option) any later version.\n"                                 \
+            "\n"                                                                    \
+            "This program is distributed in the hope that it will be useful,\n"     \
+            "but WITHOUT ANY WARRANTY; without even the implied warranty of\n"      \
+            "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n"       \
+            "GNU General Public License for more details.\n"                        \
+            "\n"                                                                    \
+            "You should have received a copy of the GNU General Public License\n"   \
+            "along with this program.  If not, see <http://www.gnu.org/licenses/>.\n"\
+            "\n"                                                                    \
+            "Modified in 2023.2,by dianjixz"             
+            
+    def get_version(self):
+        print(self.version)
+        return 0
+
+    def get_help(self):
+        print(self.HelpMsg)
+        return 0
+
+    def get_about(self):
+        print(self.AboutMsg)
+        return 0
+    def get(self):
+        self.get_Default()
+        print(self.DefaultPackageManager)
+        return 0
+    def set_default(self, pname = ""):
+        package = None
+        if pname == "":
+            if(len(self.argv) < 2):
+                print("failure! not can set!")
+                return -1
+            package = self.argv[1]
+        else:
+            package = pname
+        if package in self.PackageManagerTranslationDict:
+            os.system("mkdir -p /etc/sysget")
+            with open(self.EnvConfigPath, "w") as f:
+                f.write(package)
+            print("set default " + package + " success")
+        else:
+            print("failure")
+            return -2
+
+    def get_Default(self):
+        if os.path.isfile(self.EnvConfigPath):
+            with open(self.EnvConfigPath, "r") as f:
+                self.DefaultPackageManager = f.read()
+        else:
+            PackageName = list(self.PackageManagerTranslationDict.keys())
+            for idx, obj in enumerate(PackageName):
+                print(str(idx) + " " + obj)
+            num = int(input("please input package num:"))
+            self.DefaultPackageManager = PackageName[num]
+            self.set_default(self.DefaultPackageManager)
+        return 0
+
+    def get_custom(self):
+        PackageName = list(self.PackageManagerTranslationDict.keys())
+        for i in range(len(PackageName)):
+            PackageName[i] = "-" + PackageName[i]
+        for idx,obj in enumerate(sysget.argv):
+            if obj[0] == '-':
+                for x in PackageName:
+                    if obj == x:
+                        self.DefaultPackageManager = x[1:]
+                        del sysget.argv[idx]
+        return 0
+
+    def work_fun(self):
+        self.get_Default()
+        self.get_custom()
+        cmds = self.PackageManagerTranslationDict[self.DefaultPackageManager][sysget.argv[0]]
+        del sysget.argv[0]
+        for obj in sysget.argv:
+            if "-y" == obj:
+                cmds += self.PackageManagerTranslationDict[self.DefaultPackageManager]["uninquire"] + " "
+            else:
+                cmds += obj + " "
+        print(cmds)
+        return os.system(cmds)
+
+
+if __name__ == "__main__":
+    sysget = sysget_object()
+    sysget.argv = sys.argv
+    del sysget.argv[0]
+    if len(sysget.argv) < 1:
+        sysget.get_help()
+        exit(0)
+    if sysget.argv[0] in sysget.CmdLists:
+        exit(sysget.CmdLists[sysget.argv[0]]()) 
+    else:
+        sysget.get_help()
+        exit(0)
+
+
+
+
